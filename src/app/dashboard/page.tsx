@@ -238,6 +238,7 @@ export default function DashboardPage() {
 	const [usageData, setUsageData] = useState<{
 		monthUsageAllowance: number;
 		remaining: number;
+		usage?: Record<string, { cost: number; count: number; units: number }>;
 	} | null>(null);
 	const [webcamOpen, setWebcamOpen] = useState(false);
 	const [captureDelay, setCaptureDelay] = useState(3);
@@ -454,7 +455,11 @@ export default function DashboardPage() {
 				if (cancelled) return;
 				const allowance = usage?.allowanceInfo?.monthUsageAllowance ?? 0;
 				const remaining = usage?.allowanceInfo?.remaining ?? 0;
-				setUsageData({ monthUsageAllowance: allowance, remaining });
+				setUsageData({
+					monthUsageAllowance: allowance,
+					remaining,
+					usage: usage?.usage,
+				});
 			} catch {
 				// Puter may require sign-in; ignore.
 			}
@@ -470,7 +475,11 @@ export default function DashboardPage() {
 			const usage = await puter.auth.getMonthlyUsage();
 			const allowance = usage?.allowanceInfo?.monthUsageAllowance ?? 0;
 			const remaining = usage?.allowanceInfo?.remaining ?? 0;
-			setUsageData({ monthUsageAllowance: allowance, remaining });
+			setUsageData({
+				monthUsageAllowance: allowance,
+				remaining,
+				usage: usage?.usage,
+			});
 		} catch {
 			// ignore
 		}
@@ -591,6 +600,28 @@ export default function DashboardPage() {
 								{usageData.monthUsageAllowance.toLocaleString()} microcents
 								remaining
 							</p>
+							{usageData.usage && Object.keys(usageData.usage).length > 0 && (
+								<div className="mt-3 space-y-1 border-t pt-3">
+									<p className="text-xs font-medium text-slate-700">
+										Usage by API (this month)
+									</p>
+									{Object.entries(usageData.usage)
+										.sort((a, b) => (b[1]?.cost ?? 0) - (a[1]?.cost ?? 0))
+										.slice(0, 6)
+										.map(([name, info]) => (
+											<div
+												key={name}
+												className="flex items-center justify-between text-xs text-slate-600"
+											>
+												<span className="truncate">{name}</span>
+												<span className="tabular-nums">
+													{info?.count ?? 0} calls ·{" "}
+													{((info?.cost ?? 0) / 1e6).toFixed(4)} $
+												</span>
+											</div>
+										))}
+								</div>
+							)}
 						</CardContent>
 					</Card>
 				)}
