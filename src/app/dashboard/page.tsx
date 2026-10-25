@@ -235,6 +235,8 @@ export default function DashboardPage() {
 	const [storedReferenceNames, setStoredReferenceNames] = useState<string[]>(
 		[],
 	);
+	const [limitReached, setLimitReached] = useState(false);
+	const [limitMessage, setLimitMessage] = useState("");
 	const [usageData, setUsageData] = useState<{
 		monthUsageAllowance: number;
 		remaining: number;
@@ -506,12 +508,38 @@ export default function DashboardPage() {
 			const image = await puter.ai.txt2img(prompt.trim(), options);
 			const src = (image as HTMLImageElement).src;
 			setImageUrl(src);
+			setLimitReached(false);
 			toast.success("Profile image generated!");
 			refreshUsage();
 		} catch (err: unknown) {
-			const message =
-				(err as { message?: string })?.message ?? "Generation failed";
-			toast.error(message);
+			const e = err as { message?: string; code?: string; status?: number };
+			const message = e?.message ?? "Generation failed";
+			const lower = message.toLowerCase();
+			if (
+				e?.code === "insufficient_funds" ||
+				e?.status === 402 ||
+				lower.includes("insufficient_funds") ||
+				lower.includes("insufficient funds")
+			) {
+				setLimitReached(true);
+				setLimitMessage(
+					"You've reached your monthly Puter usage limit. Wait for next month's reset or upgrade from the free plan.",
+				);
+				toast.error("Monthly usage limit reached");
+			} else if (
+				e?.code === "too_many_requests" ||
+				e?.status === 429 ||
+				lower.includes("too_many_requests") ||
+				lower.includes("rate limit")
+			) {
+				setLimitReached(true);
+				setLimitMessage(
+					"Rate limit reached. Please wait a moment and try again, or upgrade your plan for higher limits.",
+				);
+				toast.error("Rate limit reached");
+			} else {
+				toast.error(message);
+			}
 		} finally {
 			setLoading(false);
 		}
@@ -624,6 +652,25 @@ export default function DashboardPage() {
 							)}
 						</CardContent>
 					</Card>
+				)}
+
+				{limitReached && (
+					<div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+						<p className="font-medium">Usage limit reached</p>
+						<p className="mt-1">{limitMessage}</p>
+						<p className="mt-2 text-xs">
+							You can wait for the next monthly reset or upgrade your plan at{" "}
+							<a
+								href="https://puter.com/dashboard#billing"
+								target="_blank"
+								rel="noreferrer"
+								className="underline"
+							>
+								puter.com/dashboard
+							</a>
+							.
+						</p>
+					</div>
 				)}
 
 				<div className="grid gap-6 lg:grid-cols-2">
@@ -776,7 +823,10 @@ export default function DashboardPage() {
 							</CardDescription>
 						</CardHeader>
 						<CardContent>
-							<div className="flex min-h-[320px] items-center justify-center rounded-xl border border-dashed bg-slate-50">
+							<div
+								className="flex items-center justify-center rounded-xl border border-dashed bg-slate-50"
+								style={{ aspectRatio: aspect.replace(":", " / ") }}
+							>
 								{loading && (
 									<div className="flex flex-col items-center gap-3 text-slate-500">
 										<Loader2 className="h-8 w-8 animate-spin" />
