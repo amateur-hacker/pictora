@@ -435,6 +435,18 @@ export default function DashboardPage() {
 		};
 	}, []);
 
+	const refreshUsage = async () => {
+		try {
+			const { puter } = await import("@heyputer/puter.js");
+			const usage = await puter.auth.getMonthlyUsage();
+			const allowance = usage?.allowanceInfo?.monthUsageAllowance ?? 0;
+			const remaining = usage?.allowanceInfo?.remaining ?? 0;
+			setUsageData({ monthUsageAllowance: allowance, remaining });
+		} catch {
+			// ignore
+		}
+	};
+
 	const handleGenerate = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (!prompt.trim()) {
@@ -457,6 +469,7 @@ export default function DashboardPage() {
 			const src = (image as HTMLImageElement).src;
 			setImageUrl(src);
 			toast.success("Profile image generated!");
+			refreshUsage();
 		} catch (err: unknown) {
 			const message =
 				(err as { message?: string })?.message ?? "Generation failed";
