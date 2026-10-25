@@ -223,9 +223,13 @@ export default function DashboardPage() {
 	const [aspect, setAspect] = useState("1:1");
 	const [loading, setLoading] = useState(false);
 	const [imageUrl, setImageUrl] = useState<string | null>(null);
-	const [referenceImage, setReferenceImage] = useState<string | null>(null);
-	const [referenceName, setReferenceName] = useState<string | null>(null);
+	const [referenceImages, setReferenceImages] = useState<string[]>([]);
+	const [referenceNames, setReferenceNames] = useState<string[]>([]);
 	const [selectedFilter, setSelectedFilter] = useState("Normal");
+	const [usageData, setUsageData] = useState<{
+		monthUsageAllowance: number;
+		remaining: number;
+	} | null>(null);
 	const [webcamOpen, setWebcamOpen] = useState(false);
 	const [captureDelay, setCaptureDelay] = useState(3);
 	const [countdown, setCountdown] = useState<number | null>(null);
@@ -312,17 +316,25 @@ export default function DashboardPage() {
 	};
 
 	const handleReferenceFile = (file: File | null) => {
-		if (!file) {
-			setReferenceImage(null);
-			setReferenceName(null);
-			return;
-		}
+		if (!file) return;
 		const reader = new FileReader();
 		reader.onload = () => {
-			setReferenceImage(reader.result as string);
-			setReferenceName(file.name);
+			setReferenceImages((prev) => [...prev, reader.result as string]);
+			setReferenceNames((prev) => [...prev, file.name]);
 		};
 		reader.readAsDataURL(file);
+	};
+
+	const removeReferenceImage = (index: number) => {
+		setReferenceImages((prev) => prev.filter((_, i) => i !== index));
+		setReferenceNames((prev) => prev.filter((_, i) => i !== index));
+	};
+
+	const handleUseAsReference = () => {
+		if (!imageUrl) return;
+		setReferenceImages((prev) => [...prev, imageUrl]);
+		setReferenceNames((prev) => [...prev, "result.png"]);
+		toast.success("Added result as reference image");
 	};
 
 	useEffect(() => {
@@ -378,8 +390,8 @@ export default function DashboardPage() {
 		if (!ctx) return;
 		ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 		const dataUrl = canvas.toDataURL("image/png");
-		setReferenceImage(dataUrl);
-		setReferenceName("webcam-capture.png");
+		setReferenceImages((prev) => [...prev, dataUrl]);
+		setReferenceNames((prev) => [...prev, "webcam-capture.png"]);
 		setWebcamOpen(false);
 		toast.success("Captured from webcam");
 	}, []);
@@ -404,6 +416,25 @@ export default function DashboardPage() {
 		toast.info(`Capturing in ${captureDelay}s...`);
 	};
 
+	useEffect(() => {
+		let cancelled = false;
+		(async () => {
+			try {
+				const { puter } = await import("@heyputer/puter.js");
+				const usage = await puter.auth.getMonthlyUsage();
+				if (cancelled) return;
+				const allowance = usage?.allowanceInfo?.monthUsageAllowance ?? 0;
+				const remaining = usage?.allowanceInfo?.remaining ?? 0;
+				setUsageData({ monthUsageAllowance: allowance, remaining });
+			} catch {
+				// Puter may require sign-in; ignore.
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, []);
+
 	const handleGenerate = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (!prompt.trim()) {
@@ -419,8 +450,8 @@ export default function DashboardPage() {
 				model,
 				ratio: { w, h },
 			};
-			if (referenceImage) {
-				options.input_image = referenceImage;
+			if (referenceImages.length > 0) {
+				options.input_images = referenceImages;
 			}
 			const image = await puter.ai.txt2img(prompt.trim(), options);
 			const src = (image as HTMLImageElement).src;
@@ -485,6 +516,42 @@ export default function DashboardPage() {
 						AI.
 					</p>
 				</div>
+
+				{usageData && usageData.monthUsageAllowance > 0 && (
+					<Card className="mb-6">
+						<CardContent className="py-4">
+							<div className="flex items-center justify-between text-sm">
+								<span className="text-slate-700">Puter monthly usage</span>
+								<span className="tabular-nums text-slate-500">
+									{Math.round(
+										((usageData.monthUsageAllowance - usageData.remaining) /
+											usageData.monthUsageAllowance) *
+											100,
+									)}
+									% used
+								</span>
+							</div>
+							<div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+								<div
+									className="h-full rounded-full bg-slate-900 transition-all"
+									style={{
+										width: `${Math.min(
+											100,
+											((usageData.monthUsageAllowance - usageData.remaining) /
+												usageData.monthUsageAllowance) *
+												100,
+										)}%`,
+									}}
+								/>
+							</div>
+							<p className="mt-1 text-xs text-slate-500">
+								{usageData.remaining.toLocaleString()} of{" "}
+								{usageData.monthUsageAllowance.toLocaleString()} microcents
+								remaining
+							</p>
+						</CardContent>
+					</Card>
+				)}
 
 				<div className="grid gap-6 lg:grid-cols-2">
 					<Card>
@@ -559,7 +626,7 @@ export default function DashboardPage() {
 									<div className="flex items-center gap-3">
 										<label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
 											<Upload className="h-4 w-4" />
-											<span>{referenceName ?? "Upload an image"}</span>
+											<span>Upload an image</span>
 											<input
 												type="file"
 												accept="image/*"
@@ -579,26 +646,28 @@ export default function DashboardPage() {
 											<Camera className="h-4 w-4" />
 											Webcam
 										</Button>
-										{referenceImage && (
-											<Button
-												type="button"
-												variant="ghost"
-												size="sm"
-												onClick={() => handleReferenceFile(null)}
-												className="gap-1 text-slate-500"
-											>
-												<X className="h-4 w-4" />
-												Remove
-											</Button>
-										)}
 									</div>
-									{referenceImage && (
-										// eslint-disable-next-line @next/next/no-img-element
-										<img
-											src={referenceImage}
-											alt="Reference"
-											className="mt-2 h-24 w-24 rounded-lg object-cover border"
-										/>
+									{referenceImages.length > 0 && (
+										<div className="mt-2 flex flex-wrap gap-2">
+											{referenceImages.map((img, idx) => (
+												<div key={idx} className="relative">
+													{/* eslint-disable-next-line @next/next/no-img-element */}
+													<img
+														src={img}
+														alt={referenceNames[idx] ?? "Reference"}
+														className="h-20 w-20 rounded-lg object-cover border"
+													/>
+													<button
+														type="button"
+														onClick={() => removeReferenceImage(idx)}
+														className="absolute -right-1 -top-1 rounded-full bg-slate-900 p-0.5 text-white"
+														aria-label="Remove reference"
+													>
+														<X className="h-3 w-3" />
+													</button>
+												</div>
+											))}
+										</div>
 									)}
 								</div>
 
@@ -661,15 +730,28 @@ export default function DashboardPage() {
 							{imageUrl && (
 								<div className="mt-4 flex items-center justify-between">
 									<Badge variant="secondary">Ready</Badge>
-									<Button
-										onClick={handleDownloadFiltered}
-										variant="outline"
-										size="sm"
-										className="gap-2"
-									>
-										<Download className="h-4 w-4" />
-										Download
-									</Button>
+									<div className="flex gap-2">
+										<Button
+											type="button"
+											variant="outline"
+											size="sm"
+											onClick={handleUseAsReference}
+											disabled={!imageUrl}
+											className="gap-2"
+										>
+											<ImageIcon className="h-4 w-4" />
+											Use as reference
+										</Button>
+										<Button
+											onClick={handleDownloadFiltered}
+											variant="outline"
+											size="sm"
+											className="gap-2"
+										>
+											<Download className="h-4 w-4" />
+											Download
+										</Button>
+									</div>
 								</div>
 							)}
 						</CardContent>
