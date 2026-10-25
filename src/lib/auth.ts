@@ -1,7 +1,7 @@
-import { betterAuth } from "better-auth";
-import { username } from "better-auth/plugins";
 import { DatabaseSync } from "node:sqlite";
+import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
+import { username } from "better-auth/plugins";
 
 const dbPath =
 	process.env.DATABASE_PATH ??
