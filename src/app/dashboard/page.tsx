@@ -634,6 +634,10 @@ export default function DashboardPage() {
 										Usage by API (this month)
 									</p>
 									{Object.entries(usageData.usage)
+										.filter(([name, info]) => {
+											if (name.toLowerCase() === "total") return false;
+											return (info?.count ?? 0) > 0 || (info?.cost ?? 0) > 0;
+										})
 										.sort((a, b) => (b[1]?.cost ?? 0) - (a[1]?.cost ?? 0))
 										.slice(0, 6)
 										.map(([name, info]) => (
