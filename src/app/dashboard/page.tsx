@@ -33,6 +33,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { authClient } from "@/lib/auth-client";
 
@@ -226,6 +227,14 @@ export default function DashboardPage() {
 	const [referenceImages, setReferenceImages] = useState<string[]>([]);
 	const [referenceNames, setReferenceNames] = useState<string[]>([]);
 	const [selectedFilter, setSelectedFilter] = useState("Normal");
+	const [useResultAsRef, setUseResultAsRef] = useState(false);
+	const [storedPrompt, setStoredPrompt] = useState("");
+	const [storedReferenceImages, setStoredReferenceImages] = useState<string[]>(
+		[],
+	);
+	const [storedReferenceNames, setStoredReferenceNames] = useState<string[]>(
+		[],
+	);
 	const [usageData, setUsageData] = useState<{
 		monthUsageAllowance: number;
 		remaining: number;
@@ -330,11 +339,31 @@ export default function DashboardPage() {
 		setReferenceNames((prev) => prev.filter((_, i) => i !== index));
 	};
 
-	const handleUseAsReference = () => {
+	const _handleUseAsReference = () => {
 		if (!imageUrl) return;
 		setReferenceImages((prev) => [...prev, imageUrl]);
 		setReferenceNames((prev) => [...prev, "result.png"]);
 		toast.success("Added result as reference image");
+	};
+
+	const toggleUseResultAsRef = (checked: boolean) => {
+		if (!imageUrl) return;
+		if (checked) {
+			setStoredPrompt(prompt);
+			setStoredReferenceImages(referenceImages);
+			setStoredReferenceNames(referenceNames);
+			setPrompt("");
+			setReferenceImages([imageUrl]);
+			setReferenceNames(["result.png"]);
+			setUseResultAsRef(true);
+			toast.success("Using result as reference (prompt & refs preserved)");
+		} else {
+			setPrompt(storedPrompt);
+			setReferenceImages(storedReferenceImages);
+			setReferenceNames(storedReferenceNames);
+			setUseResultAsRef(false);
+			toast.success("Restored previous prompt & references");
+		}
 	};
 
 	useEffect(() => {
@@ -743,18 +772,17 @@ export default function DashboardPage() {
 							{imageUrl && (
 								<div className="mt-4 flex items-center justify-between">
 									<Badge variant="secondary">Ready</Badge>
-									<div className="flex gap-2">
-										<Button
-											type="button"
-											variant="outline"
-											size="sm"
-											onClick={handleUseAsReference}
-											disabled={!imageUrl}
-											className="gap-2"
-										>
-											<ImageIcon className="h-4 w-4" />
-											Use as reference
-										</Button>
+									<div className="flex items-center justify-between gap-2">
+										<div className="flex items-center gap-2">
+											<Switch
+												checked={useResultAsRef}
+												onCheckedChange={toggleUseResultAsRef}
+												disabled={!imageUrl}
+											/>
+											<span className="text-sm text-slate-600">
+												Use result as reference
+											</span>
+										</div>
 										<Button
 											onClick={handleDownloadFiltered}
 											variant="outline"
